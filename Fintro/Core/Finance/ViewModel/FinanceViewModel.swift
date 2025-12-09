@@ -107,7 +107,49 @@ class FinanceViewModel: ObservableObject {
 
         return summaries.sorted { $0.month > $1.month }
     }
-    
+
+    // MARK: - Filtros por mes para análisis detallado
+
+    func paychecks(forMonth month: Date) -> [Paycheck] {
+        guard let range = monthDateRange(for: month) else { return [] }
+        return allPaychecks.filter { paycheck in
+            let date = paycheck.date.dateValue()
+            return date >= range.start && date <= range.end
+        }
+    }
+
+    func variableExpenses(forMonth month: Date) -> [Expense] {
+        guard let range = monthDateRange(for: month) else { return [] }
+        return allVariableExpenses.filter { expense in
+            let date = expense.date.dateValue()
+            return date >= range.start && date <= range.end
+        }
+    }
+
+    func fixedExpenses(forMonth month: Date) -> [FixedExpense] {
+        guard let range = monthDateRange(for: month) else { return [] }
+        return allFixedExpenses.filter { expense in
+            guard let expenseDate = date(forDay: expense.dayOfMonth, in: month) else { return false }
+            return expenseDate >= range.start && expenseDate <= range.end
+        }
+    }
+
+    func savings(forMonth month: Date) -> [Saving] {
+        guard let range = monthDateRange(for: month) else { return [] }
+        return allSavings.filter { saving in
+            let date = saving.date.dateValue()
+            return date >= range.start && date <= range.end
+        }
+    }
+
+    func creditCards(forMonth month: Date) -> [CreditCard] {
+        guard let range = monthDateRange(for: month) else { return [] }
+        return allCreditCards.filter { card in
+            guard let dueDate = date(forDay: card.paymentDueDate, in: month) else { return false }
+            return dueDate >= range.start && dueDate <= range.end
+        }
+    }
+
     private let firestoreService = FirestoreService.shared
     
     init() {
@@ -247,6 +289,25 @@ class FinanceViewModel: ObservableObject {
         let startDate = calendar.startOfDay(for: startDateBase)
         let endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDateBase) ?? endDateBase
         return (start: startDate, end: endDate)
+    }
+
+    private func monthDateRange(for month: Date) -> (start: Date, end: Date)? {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: month)
+        guard let startDate = calendar.date(from: components),
+              let dayRange = calendar.range(of: .day, in: .month, for: startDate),
+              let monthEnd = calendar.date(bySetting: .day, value: dayRange.count, of: startDate) else { return nil }
+
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: monthEnd) ?? monthEnd
+        return (start: start, end: end)
+    }
+
+    private func date(forDay day: Int, in month: Date) -> Date? {
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month], from: month)
+        components.day = day
+        return calendar.date(from: components)
     }
 
     // --- Lógica de "Escucha" ---
