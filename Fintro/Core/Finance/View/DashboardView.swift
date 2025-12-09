@@ -29,7 +29,12 @@ struct DashboardView: View {
      var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                summaryCard.padding()
+                summaryCard
+                    .padding()
+                    .onTapGesture {
+                        viewModel.prefillPaycheckAmount()
+                        showingAddPaycheckSheet = true
+                    }
                 
                 periodPicker // Selector de quincena
                 
