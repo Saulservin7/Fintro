@@ -8,7 +8,8 @@ struct DashboardView: View {
     @State private var showingAddPaycheckSheet = false
     @State private var showingSavingsSheet = false
     @State private var sheetToShow: SheetType? // Estado único para todas las hojas
-    
+    @State private var selectedSection: DashboardSection = .overview
+
     // Enum para gestionar las hojas de forma limpia
     enum SheetType: Identifiable {
         case addVariable, addFixed, editVariable(Expense), editFixed(FixedExpense)
@@ -26,7 +27,23 @@ struct DashboardView: View {
             }
         }
     }
-    
+
+    enum DashboardSection: String, CaseIterable, Identifiable {
+        case overview
+        case savings
+        case history
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .overview: return "Resumen"
+            case .savings: return "Ahorros"
+            case .history: return "Historial"
+            }
+        }
+    }
+
      var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -39,72 +56,11 @@ struct DashboardView: View {
 
                 periodPicker // Selector de quincena
 
-                List {
-                    Section(header: Text("Ahorros")) {
-                        Button(action: {
-                            viewModel.prefillSavingAmount()
-                            showingSavingsSheet = true
-                        }) {
-                            savingsCard
-                        }
-                        .buttonStyle(.plain)
-                    }
+                sectionPicker
+                    .padding(.horizontal)
+                    .padding(.bottom, 10)
 
-                    // SECCIÓN PARA TARJETAS DE CRÉDITO
-                    Section(header: Text("Tarjetas de Crédito")) {
-                        if viewModel.creditCardsForCurrentPeriod.isEmpty {
-                            Text("Sin tarjetas con pago en esta quincena.")
-                                .foregroundStyle(.secondary)
-                        } else {
-                            ForEach(viewModel.creditCardsForCurrentPeriod) { card in
-                                Button(action: {
-                                    viewModel.setupEditing(card: card)
-                                    sheetToShow = .editCard(card)
-                                }) {
-                                    creditCardRow(for: card) // <-- VISTA AÑADIDA
-                                }
-                            }
-                            .onDelete(perform: viewModel.deleteCreditCard)
-                        }
-                    }
-                    
-                    // SECCIÓN DE GASTOS FIJOS
-                    Section(header: Text("Gastos Fijos de este Periodo")) {
-                        if viewModel.fixedExpensesForCurrentPeriod.isEmpty {
-                            Text("Sin gastos fijos para esta quincena.").foregroundStyle(.secondary)
-                        } else {
-                            ForEach(viewModel.fixedExpensesForCurrentPeriod) { expense in
-                                Button(action: {
-                                    viewModel.setupEditing(fixedExpense: expense)
-                                    sheetToShow = .editFixed(expense)
-                                }) {
-                                    expenseRow(name: expense.name, amount: expense.amount, day: expense.dayOfMonth)
-                                }
-                            }
-                            .onDelete(perform: viewModel.deleteFixedExpense)
-                        }
-                    }
-                     
-                    // SECCIÓN DE GASTOS VARIABLES
-                    Section(header: Text("Gastos Variables de este Periodo")) {
-                        if viewModel.variableExpensesForCurrentPeriod.isEmpty {
-                           Text("Sin gastos variables en esta quincena.").foregroundStyle(.secondary)
-                       } else {
-                            ForEach(viewModel.variableExpensesForCurrentPeriod) { expense in
-                                Button(action: {
-                                    viewModel.setupEditing(variableExpense: expense)
-                                    sheetToShow = .editVariable(expense)
-                                }) {
-                                    expenseRow(name: expense.name, amount: expense.amount, date: expense.date.dateValue())
-                                }
-                            }
-                            .onDelete(perform: viewModel.deleteVariableExpense)
-                        }
-                    }
-
-                    monthlyHistorySection
-                }
-                .listStyle(.insetGrouped)
+                sectionContent
             }
             .navigationTitle("Dashboard")
             .toolbar {
@@ -140,6 +96,111 @@ struct DashboardView: View {
             }
         }
      }
+
+    private var sectionPicker: some View {
+        Picker("Sección del dashboard", selection: $selectedSection) {
+            ForEach(DashboardSection.allCases) { section in
+                Text(section.title).tag(section)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
+    @ViewBuilder
+    private var sectionContent: some View {
+        switch selectedSection {
+        case .overview:
+            overviewList
+        case .savings:
+            savingsList
+        case .history:
+            historyList
+        }
+    }
+
+    private var overviewList: some View {
+        List {
+            // SECCIÓN PARA TARJETAS DE CRÉDITO
+            Section(header: Text("Tarjetas de Crédito")) {
+                if viewModel.creditCardsForCurrentPeriod.isEmpty {
+                    Text("Sin tarjetas con pago en esta quincena.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(viewModel.creditCardsForCurrentPeriod) { card in
+                        Button(action: {
+                            viewModel.setupEditing(card: card)
+                            sheetToShow = .editCard(card)
+                        }) {
+                            creditCardRow(for: card) // <-- VISTA AÑADIDA
+                        }
+                    }
+                    .onDelete(perform: viewModel.deleteCreditCard)
+                }
+            }
+
+            // SECCIÓN DE GASTOS FIJOS
+            Section(header: Text("Gastos Fijos de este Periodo")) {
+                if viewModel.fixedExpensesForCurrentPeriod.isEmpty {
+                    Text("Sin gastos fijos para esta quincena.").foregroundStyle(.secondary)
+                } else {
+                    ForEach(viewModel.fixedExpensesForCurrentPeriod) { expense in
+                        Button(action: {
+                            viewModel.setupEditing(fixedExpense: expense)
+                            sheetToShow = .editFixed(expense)
+                        }) {
+                            expenseRow(name: expense.name, amount: expense.amount, day: expense.dayOfMonth)
+                        }
+                    }
+                    .onDelete(perform: viewModel.deleteFixedExpense)
+                }
+            }
+
+            // SECCIÓN DE GASTOS VARIABLES
+            Section(header: Text("Gastos Variables de este Periodo")) {
+                if viewModel.variableExpensesForCurrentPeriod.isEmpty {
+                   Text("Sin gastos variables en esta quincena.").foregroundStyle(.secondary)
+               } else {
+                    ForEach(viewModel.variableExpensesForCurrentPeriod) { expense in
+                        Button(action: {
+                            viewModel.setupEditing(variableExpense: expense)
+                            sheetToShow = .editVariable(expense)
+                        }) {
+                            expenseRow(name: expense.name, amount: expense.amount, date: expense.date.dateValue())
+                        }
+                    }
+                    .onDelete(perform: viewModel.deleteVariableExpense)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private var savingsList: some View {
+        List {
+            Section(header: Text("Ahorros")) {
+                Button(action: {
+                    viewModel.prefillSavingAmount()
+                    showingSavingsSheet = true
+                }) {
+                    savingsCard
+                }
+                .buttonStyle(.plain)
+
+                Text("Administra tus ahorros desde aquí para no saturar el resumen.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private var historyList: some View {
+        List {
+            monthlyHistorySection
+        }
+        .listStyle(.insetGrouped)
+    }
     
     // --- Sub-vistas y Componentes ---
     
