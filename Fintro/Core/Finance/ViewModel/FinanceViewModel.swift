@@ -11,6 +11,7 @@ class FinanceViewModel: ObservableObject {
     @Published var allVariableExpenses: [Expense] = []
     @Published var allFixedExpenses: [FixedExpense] = []
     @Published var allCreditCards: [CreditCard] = [] // <-- NUEVO
+    @Published var allSavings: [Saving] = []
     
     // --- Estado de la App ---
     @Published var currentPeriod: Period = .first // <-- CAMBIO AQUÍ
@@ -26,6 +27,7 @@ class FinanceViewModel: ObservableObject {
     @Published var fixedExpenseAmount: String = ""
     @Published var fixedExpenseDay: String = ""
     @Published var cardName = ""; @Published var cardDebt = ""; @Published var cardClosingDate = ""; @Published var cardPaymentDate = "" // <-- NUEVO
+    @Published var savingAmount: String = ""
     
     // MARK: - Propiedades Calculadas (El Cerebro)
     
@@ -38,6 +40,10 @@ class FinanceViewModel: ObservableObject {
     var currentPaycheckAmount: Double {
         allPaychecks.first?.amount ?? 0
     }
+
+    var currentSavingsAmount: Double {
+        allSavings.first?.amount ?? 0
+    }
     
     // Filtra los gastos fijos que corresponden a la quincena actual
     var fixedExpensesForCurrentPeriod: [FixedExpense] {
@@ -46,19 +52,11 @@ class FinanceViewModel: ObservableObject {
     
     // Filtra los gastos variables que corresponden a la quincena actual
     var variableExpensesForCurrentPeriod: [Expense] {
-        let now = Date()
-        let calendar = Calendar.current
-        let currentMonth = calendar.component(.month, from: now)
-        let currentYear = calendar.component(.year, from: now)
-        
+        guard let range = dateRange(for: currentPeriod) else { return [] }
+
         return allVariableExpenses.filter { expense in
             let expenseDate = expense.date.dateValue()
-            let expenseMonth = calendar.component(.month, from: expenseDate)
-            let expenseYear = calendar.component(.year, from: expenseDate)
-            let expenseDay = calendar.component(.day, from: expenseDate)
-            
-            // Debe ser del mismo mes/año y pertenecer al periodo actual
-            return expenseMonth == currentMonth && expenseYear == currentYear && currentPeriod.contains(day: expenseDay)
+            return expenseDate >= range.start && expenseDate <= range.end
         }
     }
     
@@ -97,6 +95,7 @@ class FinanceViewModel: ObservableObject {
             listenForExpenses()
             listenForFixedExpenses()
             listenForCreditCards() // <-- NUEVO
+            listenForSavings()
         }
     
     private func listenForCreditCards() {
@@ -153,6 +152,10 @@ class FinanceViewModel: ObservableObject {
             cardName = ""; cardDebt = ""; cardClosingDate = ""; cardPaymentDate = ""
         }
 
+    func prefillSavingAmount() {
+        savingAmount = currentSavingsAmount > 0 ? String(currentSavingsAmount) : ""
+    }
+
         func clearAndDismissEditing() {
             // ... (código existente)
             clearCardFields()
@@ -174,7 +177,49 @@ class FinanceViewModel: ObservableObject {
             self.currentPeriod = .second
         }
     }
-    
+
+    private func dateRange(for period: Period, referenceDate: Date = Date()) -> (start: Date, end: Date)? {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month, .day], from: referenceDate)
+        guard let day = components.day else { return nil }
+
+        var startComponents = components
+        var endComponents = components
+
+        switch period {
+        case .first:
+            if day >= 14 {
+                startComponents.day = 14
+                endComponents.day = 28
+            } else {
+                guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: referenceDate) else { return nil }
+                startComponents = calendar.dateComponents([.year, .month], from: previousMonth)
+                endComponents = startComponents
+                startComponents.day = 14
+                endComponents.day = 28
+            }
+        case .second:
+            if day >= 29 {
+                startComponents.day = 29
+                guard let nextMonth = calendar.date(byAdding: .month, value: 1, to: referenceDate) else { return nil }
+                endComponents = calendar.dateComponents([.year, .month], from: nextMonth)
+                endComponents.day = 13
+            } else {
+                guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: referenceDate) else { return nil }
+                startComponents = calendar.dateComponents([.year, .month], from: previousMonth)
+                startComponents.day = 29
+                endComponents.day = 13
+            }
+        }
+
+        guard let startDateBase = calendar.date(from: startComponents),
+              let endDateBase = calendar.date(from: endComponents) else { return nil }
+
+        let startDate = calendar.startOfDay(for: startDateBase)
+        let endDate = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: endDateBase) ?? endDateBase
+        return (start: startDate, end: endDate)
+    }
+
     // --- Lógica de "Escucha" ---
     private func listenForPaychecks() {
         Task {
@@ -193,6 +238,14 @@ class FinanceViewModel: ObservableObject {
             for try await fixedExpenses in await firestoreService.listenForFixedExpenses() { self.allFixedExpenses = fixedExpenses }
         }
     }
+
+    private func listenForSavings() {
+        Task {
+            for try await savings in await firestoreService.listenForSavings() {
+                self.allSavings = savings
+            }
+        }
+    }
     
     // MARK: - Acciones del Usuario
     
@@ -209,6 +262,19 @@ class FinanceViewModel: ObservableObject {
     func addVariableExpense() {
         guard let amount = Double(expenseAmount) else { return }
         Task { try? await firestoreService.saveExpense(name: expenseName, amount: amount); expenseName = ""; expenseAmount = "" }
+    }
+
+    func addOrUpdateSaving() {
+        guard let amount = Double(savingAmount), let userId = Auth.auth().currentUser?.uid else { return }
+
+        if var existingSaving = allSavings.first {
+            existingSaving.amount = amount
+            existingSaving.date = Timestamp(date: Date())
+            Task { try? await firestoreService.updateSaving(existingSaving); savingAmount = "" }
+        } else {
+            let newSaving = Saving(amount: amount, date: Timestamp(date: Date()), userId: userId)
+            Task { try? await firestoreService.saveSaving(newSaving); savingAmount = "" }
+        }
     }
     
     func addFixedExpense() {
