@@ -71,14 +71,12 @@ class FinanceViewModel: ObservableObject {
     
     // Suma de las deudas de tarjetas de crédito CON FECHA DE PAGO en este periodo.
     var totalCreditCardDebt: Double {
-        // 1. Filtramos las tarjetas
-        let cardsDueThisPeriod = allCreditCards.filter { card in
-            // 2. Usamos la misma lógica del enum Period para ver si la fecha de pago cae en el periodo actual
-            currentPeriod.contains(day: card.paymentDueDate)
-        }
-        
-        // 3. Sumamos solo la deuda de esas tarjetas filtradas
-        return cardsDueThisPeriod.reduce(0) { $0 + $1.currentDebt }
+        creditCardsForCurrentPeriod.reduce(0) { $0 + $1.currentDebt }
+    }
+
+    // Filtra las tarjetas cuya fecha de pago pertenece a la quincena actual
+    var creditCardsForCurrentPeriod: [CreditCard] {
+        allCreditCards.filter { currentPeriod.contains(day: $0.paymentDueDate) }
     }
     
     // El balance restante para la quincena
@@ -143,7 +141,7 @@ class FinanceViewModel: ObservableObject {
         }
         
         func deleteCreditCard(at offsets: IndexSet) {
-            let cardsToDelete = offsets.map { allCreditCards[$0] }
+            let cardsToDelete = offsets.map { creditCardsForCurrentPeriod[$0] }
             Task {
                 for card in cardsToDelete where card.id != nil {
                     try? await firestoreService.deleteCreditCard(cardId: card.id!)
