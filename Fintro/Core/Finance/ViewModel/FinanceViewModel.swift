@@ -203,6 +203,10 @@ class FinanceViewModel: ObservableObject {
         let newPaycheck = Paycheck(amount: amount, date: Timestamp(date: Date()), userId: userId)
         Task { try? await firestoreService.savePaycheck(newPaycheck); paycheckAmount = "" }
     }
+
+    func prefillPaycheckAmount() {
+        paycheckAmount = currentPaycheckAmount > 0 ? String(currentPaycheckAmount) : ""
+    }
     
     func addVariableExpense() {
         guard let amount = Double(expenseAmount) else { return }
