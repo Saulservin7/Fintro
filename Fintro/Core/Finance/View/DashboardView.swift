@@ -41,11 +41,11 @@ struct DashboardView: View {
                 List {
                     // SECCIÓN PARA TARJETAS DE CRÉDITO
                     Section(header: Text("Tarjetas de Crédito")) {
-                        if viewModel.allCreditCards.isEmpty {
-                            Text("Añade tu primera tarjeta de crédito.")
+                        if viewModel.creditCardsForCurrentPeriod.isEmpty {
+                            Text("Sin tarjetas con pago en esta quincena.")
                                 .foregroundStyle(.secondary)
                         } else {
-                            ForEach(viewModel.allCreditCards) { card in
+                            ForEach(viewModel.creditCardsForCurrentPeriod) { card in
                                 Button(action: {
                                     viewModel.setupEditing(card: card)
                                     sheetToShow = .editCard(card)
