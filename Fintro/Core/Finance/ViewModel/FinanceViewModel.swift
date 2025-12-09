@@ -22,6 +22,7 @@ class FinanceViewModel: ObservableObject {
     // --- Campos para Formularios ---
     @Published var expenseName: String = ""
     @Published var expenseAmount: String = ""
+    @Published var expenseDate: Date = Date()
     @Published var paycheckAmount: String = ""
     @Published var fixedExpenseName: String = ""
     @Published var fixedExpenseAmount: String = ""
@@ -81,6 +82,31 @@ class FinanceViewModel: ObservableObject {
     var remainingBalance: Double {
             currentPaycheckAmount - totalPeriodExpenses - totalCreditCardDebt
         }
+
+    // Historial mensual de balances
+    var monthlyBalanceHistory: [MonthlyBalance] {
+        let calendar = Calendar.current
+
+        let monthComponents = allVariableExpenses.map { calendar.dateComponents([.year, .month], from: $0.date.dateValue()) } +
+        allPaychecks.map { calendar.dateComponents([.year, .month], from: $0.date.dateValue()) }
+
+        let monthStarts = Set(monthComponents.compactMap { calendar.date(from: $0) })
+        let fixedTotal = allFixedExpenses.reduce(0) { $0 + $1.amount }
+
+        let summaries: [MonthlyBalance] = monthStarts.compactMap { monthStart in
+            let income = allPaychecks
+                .filter { calendar.isDate($0.date.dateValue(), equalTo: monthStart, toGranularity: .month) }
+                .reduce(0) { $0 + $1.amount }
+
+            let variableExpenses = allVariableExpenses
+                .filter { calendar.isDate($0.date.dateValue(), equalTo: monthStart, toGranularity: .month) }
+                .reduce(0) { $0 + $1.amount }
+
+            return MonthlyBalance(month: monthStart, income: income, variableExpenses: variableExpenses, fixedExpenses: fixedTotal)
+        }
+
+        return summaries.sorted { $0.month > $1.month }
+    }
     
     private let firestoreService = FirestoreService.shared
     
@@ -157,8 +183,11 @@ class FinanceViewModel: ObservableObject {
     }
 
         func clearAndDismissEditing() {
-            // ... (código existente)
+            clearVariableExpenseFields()
+            clearFixedExpenseFields()
             clearCardFields()
+            expenseToEdit = nil
+            fixedExpenseToEdit = nil
             cardToEdit = nil
         }
     
@@ -261,7 +290,11 @@ class FinanceViewModel: ObservableObject {
     
     func addVariableExpense() {
         guard let amount = Double(expenseAmount) else { return }
-        Task { try? await firestoreService.saveExpense(name: expenseName, amount: amount); expenseName = ""; expenseAmount = "" }
+        let selectedDate = expenseDate
+        Task {
+            try? await firestoreService.saveExpense(name: expenseName, amount: amount, date: selectedDate)
+            clearVariableExpenseFields()
+        }
     }
 
     func addOrUpdateSaving() {
@@ -297,6 +330,7 @@ class FinanceViewModel: ObservableObject {
             expenseToEdit = expense
             expenseName = expense.name
             expenseAmount = String(expense.amount)
+            expenseDate = expense.date.dateValue()
         }
 
         func setupEditing(fixedExpense expense: FixedExpense) {
@@ -308,9 +342,10 @@ class FinanceViewModel: ObservableObject {
         
         func updateVariableExpense() {
             guard var expense = expenseToEdit, let amount = Double(expenseAmount) else { return }
-            
+
             expense.name = expenseName
             expense.amount = amount
+            expense.date = Timestamp(date: expenseDate)
             
             Task {
                 try? await firestoreService.updateVariableExpense(expense)
@@ -363,6 +398,7 @@ class FinanceViewModel: ObservableObject {
         func clearVariableExpenseFields() {
             expenseName = ""
             expenseAmount = ""
+            expenseDate = Date()
         }
 
         func clearFixedExpenseFields() {
@@ -410,4 +446,30 @@ enum Period: CaseIterable, Identifiable {
             return day >= 29 || day <= 13
         }
     }
+}
+
+struct MonthlyBalance: Identifiable {
+    let month: Date
+    let income: Double
+    let variableExpenses: Double
+    let fixedExpenses: Double
+
+    var balance: Double { income - variableExpenses - fixedExpenses }
+    var id: String { DateFormatter.monthIdentifier.string(from: month) }
+    var displayMonth: String { DateFormatter.monthAndYear.string(from: month) }
+}
+
+private extension DateFormatter {
+    static let monthAndYear: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_MX")
+        formatter.dateFormat = "LLLL yyyy"
+        return formatter
+    }()
+
+    static let monthIdentifier: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM"
+        return formatter
+    }()
 }

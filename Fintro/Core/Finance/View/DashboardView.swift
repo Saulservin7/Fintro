@@ -95,12 +95,14 @@ struct DashboardView: View {
                                     viewModel.setupEditing(variableExpense: expense)
                                     sheetToShow = .editVariable(expense)
                                 }) {
-                                    expenseRow(name: expense.name, amount: expense.amount)
+                                    expenseRow(name: expense.name, amount: expense.amount, date: expense.date.dateValue())
                                 }
                             }
                             .onDelete(perform: viewModel.deleteVariableExpense)
                         }
                     }
+
+                    monthlyHistorySection
                 }
                 .listStyle(.insetGrouped)
             }
@@ -233,20 +235,69 @@ struct DashboardView: View {
     }
 
     // Fila para Gasto (sin cambios, pero se incluye)
-    private func expenseRow(name: String, amount: Double, day: Int? = nil) -> some View {
-        HStack {
-            Text(name).foregroundStyle(.primary) // Color primario para el texto
-            if let day = day {
-                Text("Día \(day)")
-                    .font(.caption)
-                    .padding(.horizontal, 8)
-                    .background(Color.gray.opacity(0.2))
-                    .clipShape(Capsule())
-            }
-            Spacer()
-            Text(amount, format: .currency(code: "MXN")).foregroundStyle(.secondary)
-        }
-    }
+      private func expenseRow(name: String, amount: Double, day: Int? = nil, date: Date? = nil) -> some View {
+          HStack {
+              Text(name).foregroundStyle(.primary) // Color primario para el texto
+              if let day = day {
+                  Text("Día \(day)")
+                      .font(.caption)
+                      .padding(.horizontal, 8)
+                      .background(Color.gray.opacity(0.2))
+                      .clipShape(Capsule())
+              } else if let date = date {
+                  Text(date, style: .date)
+                      .font(.caption)
+                      .padding(.horizontal, 8)
+                      .background(Color.gray.opacity(0.2))
+                      .clipShape(Capsule())
+              }
+              Spacer()
+              Text(amount, format: .currency(code: "MXN")).foregroundStyle(.secondary)
+          }
+      }
+
+      private var monthlyHistorySection: some View {
+          Section(header: Text("Historial mensual de balances")) {
+              if viewModel.monthlyBalanceHistory.isEmpty {
+                  Text("Sin movimientos registrados.").foregroundStyle(.secondary)
+              } else {
+                  ForEach(viewModel.monthlyBalanceHistory) { summary in
+                      monthlyHistoryRow(summary)
+                  }
+              }
+          }
+      }
+
+      private func monthlyHistoryRow(_ summary: MonthlyBalance) -> some View {
+          VStack(alignment: .leading, spacing: 8) {
+              HStack {
+                  Text(summary.displayMonth.capitalized)
+                      .font(.headline)
+                  Spacer()
+                  Text(summary.balance, format: .currency(code: "MXN"))
+                      .font(.headline)
+                      .foregroundStyle(summary.balance < 0 ? .red : .green)
+              }
+
+              HStack(spacing: 16) {
+                  Label {
+                      Text(summary.income, format: .currency(code: "MXN"))
+                  } icon: {
+                      Image(systemName: "arrow.down.circle")
+                  }
+                  .foregroundStyle(.primary)
+
+                  Label {
+                      Text(summary.variableExpenses + summary.fixedExpenses, format: .currency(code: "MXN"))
+                  } icon: {
+                      Image(systemName: "arrow.up.circle")
+                  }
+                  .foregroundStyle(.secondary)
+              }
+              .font(.caption)
+          }
+          .padding(.vertical, 4)
+      }
     
     // Hoja para Ingreso (sin cambios, pero se incluye)
     private var addPaycheckSheet: some View {
@@ -299,15 +350,19 @@ struct DashboardView: View {
     private func expenseEditSheet(isEditing: Bool, type: ExpenseType) -> some View {
          NavigationStack {
              Form {
-                 Section(header: Text(isEditing ? "Editar Gasto" : (type == .variable ? "Nuevo Gasto Variable" : "Nuevo Gasto Fijo"))) {
-                     TextField("Nombre", text: type == .variable ? $viewModel.expenseName : $viewModel.fixedExpenseName)
-                     TextField("Monto", text: type == .variable ? $viewModel.expenseAmount : $viewModel.fixedExpenseAmount)
-                         .keyboardType(.decimalPad)
-                     
-                     if type == .fixed {
-                         TextField("Día del mes (1-31)", text: $viewModel.fixedExpenseDay)
-                             .keyboardType(.numberPad)
-                     }
+                   Section(header: Text(isEditing ? "Editar Gasto" : (type == .variable ? "Nuevo Gasto Variable" : "Nuevo Gasto Fijo"))) {
+                       TextField("Nombre", text: type == .variable ? $viewModel.expenseName : $viewModel.fixedExpenseName)
+                       TextField("Monto", text: type == .variable ? $viewModel.expenseAmount : $viewModel.fixedExpenseAmount)
+                           .keyboardType(.decimalPad)
+
+                        if type == .variable {
+                            DatePicker("Fecha", selection: $viewModel.expenseDate, displayedComponents: .date)
+                        }
+
+                       if type == .fixed {
+                           TextField("Día del mes (1-31)", text: $viewModel.fixedExpenseDay)
+                               .keyboardType(.numberPad)
+                       }
                  }
              }
              .navigationTitle(isEditing ? "Editar Gasto" : "Nuevo Gasto")
