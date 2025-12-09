@@ -323,7 +323,18 @@ struct DashboardView: View {
                   Text("Sin movimientos registrados.").foregroundStyle(.secondary)
               } else {
                   ForEach(viewModel.monthlyBalanceHistory) { summary in
-                      monthlyHistoryRow(summary)
+                      NavigationLink {
+                          MonthlyBalanceDetailView(
+                              summary: summary,
+                              paychecks: viewModel.paychecks(forMonth: summary.month),
+                              variableExpenses: viewModel.variableExpenses(forMonth: summary.month),
+                              fixedExpenses: viewModel.fixedExpenses(forMonth: summary.month),
+                              creditCards: viewModel.creditCards(forMonth: summary.month),
+                              savings: viewModel.savings(forMonth: summary.month)
+                          )
+                      } label: {
+                          monthlyHistoryRow(summary)
+                      }
                   }
               }
           }
