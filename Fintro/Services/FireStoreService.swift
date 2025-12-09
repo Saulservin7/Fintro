@@ -35,15 +35,15 @@ actor FirestoreService {
     // MARK: - Public API
     
     // Función para guardar un gasto
-    func saveExpense(name: String, amount: Double) async throws {
+    func saveExpense(name: String, amount: Double, date: Date) async throws {
         // 1. Obtenemos el ID del usuario aquí, en el servicio.
         let userId = try getCurrentUserID()
-        
+
         // 2. Creamos el objeto Expense completo aquí.
         let newExpense = Expense(
             name: name,
             amount: amount,
-            date: Timestamp(date: Date()), // El servicio también asigna la fecha.
+            date: Timestamp(date: date), // El servicio también asigna la fecha.
             userId: userId
         )
         
