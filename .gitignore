@@ -1,0 +1,18 @@
+# Xcode
+DerivedData/
+build/
+xcuserdata/
+*.xcuserstate
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Packages/
+Package.resolved
+
+# Logs
+*.log
+
+# Archives
+*.ipa
+*.dSYM*
