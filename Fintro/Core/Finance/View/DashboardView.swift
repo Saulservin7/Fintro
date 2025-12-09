@@ -4,8 +4,9 @@ struct DashboardView: View {
     
     @StateObject private var viewModel = FinanceViewModel()
     @EnvironmentObject var authViewModel: AuthViewModel
-    
+
     @State private var showingAddPaycheckSheet = false
+    @State private var showingSavingsSheet = false
     @State private var sheetToShow: SheetType? // Estado único para todas las hojas
     
     // Enum para gestionar las hojas de forma limpia
@@ -35,10 +36,20 @@ struct DashboardView: View {
                         viewModel.prefillPaycheckAmount()
                         showingAddPaycheckSheet = true
                     }
-                
+
                 periodPicker // Selector de quincena
-                
+
                 List {
+                    Section(header: Text("Ahorros")) {
+                        Button(action: {
+                            viewModel.prefillSavingAmount()
+                            showingSavingsSheet = true
+                        }) {
+                            savingsCard
+                        }
+                        .buttonStyle(.plain)
+                    }
+
                     // SECCIÓN PARA TARJETAS DE CRÉDITO
                     Section(header: Text("Tarjetas de Crédito")) {
                         if viewModel.creditCardsForCurrentPeriod.isEmpty {
@@ -107,6 +118,7 @@ struct DashboardView: View {
                  }
             }
             .sheet(isPresented: $showingAddPaycheckSheet) { addPaycheckSheet }
+            .sheet(isPresented: $showingSavingsSheet) { savingsSheet }
             // HOJA ÚNICA QUE REACCIONA A TODOS LOS CASOS
             .sheet(item: $sheetToShow) { sheet in
                  switch sheet {
@@ -163,6 +175,27 @@ struct DashboardView: View {
         .background(Color.blue.gradient)
         .cornerRadius(20)
         .shadow(radius: 10)
+    }
+
+    private var savingsCard: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Ahorros actuales")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(viewModel.currentSavingsAmount, format: .currency(code: "MXN"))
+                    .font(.title2).fontWeight(.bold)
+                    .foregroundStyle(.primary)
+            }
+            Spacer()
+            Image(systemName: "arrow.up.arrow.down.circle.fill")
+                .font(.title2)
+                .foregroundColor(.green)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(Color.green.opacity(0.15))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 
     // Selector de periodo extraído
@@ -233,6 +266,31 @@ struct DashboardView: View {
              }
          }
      }
+
+    private var savingsSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Monto de ahorros") {
+                    TextField("Ej. 5000.00", text: $viewModel.savingAmount)
+                        .keyboardType(.decimalPad)
+                }
+            }
+            .navigationTitle("Actualizar Ahorros")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") { showingSavingsSheet = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Guardar") {
+                        viewModel.addOrUpdateSaving()
+                        showingSavingsSheet = false
+                    }
+                    .disabled(viewModel.savingAmount.isEmpty)
+                }
+            }
+        }
+    }
     
     // Hoja reutilizable para Gastos (sin cambios, pero se incluye)
     enum ExpenseType { case variable, fixed }

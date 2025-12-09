@@ -51,6 +51,13 @@ actor FirestoreService {
         let expenseRef = usersCollection.document(userId).collection("expenses").document()
         try expenseRef.setData(from: newExpense)
     }
+
+    // Función para guardar ahorros
+    func saveSaving(_ saving: Saving) async throws {
+        let userId = try getCurrentUserID()
+        let savingRef = usersCollection.document(userId).collection("savings").document()
+        try savingRef.setData(from: saving)
+    }
     
     // Función para guardar una quincena
     func savePaycheck(_ paycheck: Paycheck) async throws {
@@ -86,6 +93,33 @@ actor FirestoreService {
                     listener.remove()
                 }
                 
+            } catch {
+                continuation.finish(throwing: error)
+            }
+        }
+    }
+
+    func listenForSavings() -> AsyncThrowingStream<[Saving], Error> {
+        return AsyncThrowingStream { continuation in
+            do {
+                let userId = try getCurrentUserID()
+                let listener = usersCollection.document(userId).collection("savings")
+                    .order(by: "date", descending: true)
+                    .addSnapshotListener { querySnapshot, error in
+                        if let error = error {
+                            continuation.finish(throwing: error)
+                            return
+                        }
+                        guard let documents = querySnapshot?.documents else {
+                            continuation.yield([])
+                            return
+                        }
+
+                        let savings = documents.compactMap { try? $0.data(as: Saving.self) }
+                        continuation.yield(savings)
+                    }
+
+                continuation.onTermination = { @Sendable _ in listener.remove() }
             } catch {
                 continuation.finish(throwing: error)
             }
@@ -197,6 +231,13 @@ actor FirestoreService {
         let userId = try getCurrentUserID()
         let documentRef = usersCollection.document(userId).collection("fixed_expenses").document(expenseId)
         try documentRef.setData(from: expense)
+    }
+
+    func updateSaving(_ saving: Saving) async throws {
+        guard let savingId = saving.id else { throw URLError(.badServerResponse) }
+        let userId = try getCurrentUserID()
+        let documentRef = usersCollection.document(userId).collection("savings").document(savingId)
+        try documentRef.setData(from: saving)
     }
     
 
